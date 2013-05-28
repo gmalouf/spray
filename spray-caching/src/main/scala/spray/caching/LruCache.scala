@@ -98,6 +98,11 @@ final class ExpiringLruCache[V](maxCapacity: Long, initialCapacity: Int,
   require(timeToLive == 0 || timeToIdle == 0 || timeToLive > timeToIdle,
     "timeToLive must be greater than timeToIdle, if both are non-zero")
 
+  //We internally use nano seconds for expiring items in the cache
+
+  private val timeToLiveNanoseconds = timeToLive * scala.math.pow(10, 6)
+  private val timeToIdleNanoseconds = timeToIdle * scala.math.pow(10, 6)
+
   private[caching] val store = new ConcurrentLinkedHashMap.Builder[Any, Entry[V]]
     .initialCapacity(initialCapacity)
     .maximumWeightedCapacity(maxCapacity)
@@ -153,19 +158,19 @@ final class ExpiringLruCache[V](maxCapacity: Long, initialCapacity: Int,
   def clear() { store.clear() }
 
   private def isAlive(entry: Entry[V]) = {
-    val now = System.currentTimeMillis
-    (timeToLive == 0 || (now - entry.created) < timeToLive) &&
-      (timeToIdle == 0 || (now - entry.lastAccessed) < timeToIdle)
+    val now = System.nanoTime()
+    (timeToLiveNanoseconds == 0 || (now - entry.created) < timeToLiveNanoseconds) &&
+      (timeToIdleNanoseconds == 0 || (now - entry.lastAccessed) < timeToIdleNanoseconds)
   }
 }
 
 private[caching] class Entry[T](val promise: Promise[T]) {
-  @volatile var created = System.currentTimeMillis
-  @volatile var lastAccessed = System.currentTimeMillis
+  @volatile var created = System.nanoTime()
+  @volatile var lastAccessed = System.nanoTime()
   def future = promise.future
   def refresh() {
     // we dont care whether we overwrite a potentially newer value
-    lastAccessed = System.currentTimeMillis
+    lastAccessed = System.nanoTime()
   }
   override def toString = future.value match {
     case Some(Success(value))     ⇒ value.toString
