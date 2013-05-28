@@ -24,7 +24,7 @@ import spray.can.rendering.HttpRequestPartRenderingContext
 import spray.can.Http
 import spray.http._
 import spray.io._
-import System.{ currentTimeMillis ⇒ now }
+import System.{ nanoTime ⇒ now }
 
 object ClientFrontend {
 
@@ -39,28 +39,28 @@ object ClientFrontend {
 
           val commandPipeline: CPL = {
             case Http.MessageCommand(HttpMessagePartWrapper(x: HttpRequest, ack)) if closeCommanders.isEmpty ⇒
-              if (openRequests.isEmpty || openRequests.last.timestamp > 0) {
+              if (openRequests.isEmpty || openRequests.last.nanoTime > 0) {
                 render(x, ack)
-                openRequests = openRequests enqueue new RequestRecord(x, context.sender, timestamp = now)
+                openRequests = openRequests enqueue new RequestRecord(x, context.sender, nanoTime = now)
               } else log.warning("Received new HttpRequest before previous chunking request was " +
                 "finished, ignoring...")
 
             case Http.MessageCommand(HttpMessagePartWrapper(x: ChunkedRequestStart, ack)) if closeCommanders.isEmpty ⇒
-              if (openRequests.isEmpty || openRequests.last.timestamp > 0) {
+              if (openRequests.isEmpty || openRequests.last.nanoTime > 0) {
                 render(x, ack)
-                openRequests = openRequests enqueue new RequestRecord(x, context.sender, timestamp = 0)
+                openRequests = openRequests enqueue new RequestRecord(x, context.sender, nanoTime = 0)
               } else log.warning("Received new ChunkedRequestStart before previous chunking " +
                 "request was finished, ignoring...")
 
             case Http.MessageCommand(HttpMessagePartWrapper(x: MessageChunk, ack)) if closeCommanders.isEmpty ⇒
-              if (!openRequests.isEmpty && openRequests.last.timestamp == 0) {
+              if (!openRequests.isEmpty && openRequests.last.nanoTime == 0) {
                 render(x, ack)
               } else log.warning("Received MessageChunk outside of chunking request context, ignoring...")
 
             case Http.MessageCommand(HttpMessagePartWrapper(x: ChunkedMessageEnd, ack)) if closeCommanders.isEmpty ⇒
-              if (!openRequests.isEmpty && openRequests.last.timestamp == 0) {
+              if (!openRequests.isEmpty && openRequests.last.nanoTime == 0) {
                 render(x, ack)
-                openRequests.last.timestamp = now // only start timer once the request is completed
+                openRequests.last.nanoTime = now // only start timer once the request is completed
               } else log.warning("Received ChunkedMessageEnd outside of chunking request " +
                 "context, ignoring...")
 
@@ -127,7 +127,7 @@ object ClientFrontend {
           def checkForTimeout(): Unit =
             if (!openRequests.isEmpty && requestTimeout.isFinite) {
               val rec = openRequests.head
-              if (rec.timestamp > 0 && rec.timestamp + requestTimeout.toMillis < now) {
+              if (rec.nanoTime > 0 && rec.nanoTime + requestTimeout.toNanos < now) {
                 log.warning("Request timed out after {}, closing connection", requestTimeout)
                 dispatch(rec.sender, Timedout(rec.request))
                 commandPL(Http.Close)
@@ -140,7 +140,7 @@ object ClientFrontend {
     }
   }
 
-  private class RequestRecord(val request: HttpRequestPart with HttpMessageStart, val sender: ActorRef, var timestamp: Long)
+  private class RequestRecord(val request: HttpRequestPart with HttpMessageStart, val sender: ActorRef, var nanoTime: Long)
 
   private case class PartAndSender(part: HttpRequestPart, sender: ActorRef)
 
