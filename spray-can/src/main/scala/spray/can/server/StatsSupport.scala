@@ -27,7 +27,7 @@ import spray.can.Http
 object StatsSupport {
 
   class StatsHolder {
-    val startTimestamp = System.currentTimeMillis
+    val startTimeNanoSeconds = System.nanoTime()
     val requestStarts = new AtomicLong
     val responseStarts = new AtomicLong
     val maxOpenRequests = new AtomicLong
@@ -57,7 +57,7 @@ object StatsSupport {
     }
 
     def toStats = Stats(
-      uptime = (System.currentTimeMillis - startTimestamp) millis span,
+      uptime = (System.nanoTime() - startTimeNanoSeconds) nanos span,
       totalRequests = requestStarts.get,
       openRequests = requestStarts.get - responseStarts.get,
       maxOpenRequests = maxOpenRequests.get,
